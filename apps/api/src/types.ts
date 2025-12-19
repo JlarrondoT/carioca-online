@@ -40,6 +40,9 @@ export type RoomState = {
   players: Player[];
 
   // Game
+  // Number of decks used for this room (1 for 2 players; 2 for 3+ players)
+  numDecks?: 1 | 2;
+
   contracts: Contract[];
   contractIndex: number;
 
@@ -53,16 +56,6 @@ export type RoomState = {
   table: Record<string, Meld[]>;
 
   hasLaidDown: Record<string, boolean>;
-
-  // Scoring / round flow
-  scores: Record<string, number>;
-  roundWinnerId: string | null;
-
-  // Turn counter increments when a turn ends (after DISCARD)
-  turnCounter: number;
-  // The turnCounter value when the player laid down the contract in this round.
-  // Used to enforce "botar a juegos" only after completing a full round.
-  laidDownTurn: Record<string, number | null>;
 };
 
 export type PublicState = {
@@ -72,10 +65,7 @@ export type PublicState = {
   players: PublicPlayer[];
 
   contractIndex: number;
-  contractsTotal: number;
   currentContract: Contract;
-  scores: Record<string, number>;
-  roundWinnerId: string | null;
 
   turnPlayerId: string | null;
   phase: Phase;
@@ -86,15 +76,12 @@ export type PublicState = {
   handsCount: Record<string, number>;
   table: Record<string, Meld[]>;
   hasLaidDown: Record<string, boolean>;
-  canLayoff: Record<string, boolean>;
 };
 
 export type ClientAction =
   | { type: 'DRAW_DECK' }
   | { type: 'DRAW_DISCARD' }
   | { type: 'LAYDOWN'; melds: Array<{ type: MeldType; cardIds: string[] }> }
-  | { type: 'MELD_EXTRA'; melds: Array<{ type: MeldType; cardIds: string[] }> }
-  | { type: 'LAYOFF'; targetPlayerId: string; meldId: string; cardIds: string[] }
   | { type: 'END_MELD' }
   | { type: 'DISCARD'; cardId: string };
 

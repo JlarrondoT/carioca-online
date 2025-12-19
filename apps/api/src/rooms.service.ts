@@ -22,6 +22,7 @@ export class RoomsService {
 
     const contracts = defaultContracts();
     const room: RoomState = {
+      numDecks: undefined,
       roomCode,
       status: 'LOBBY',
       hostPlayerId: playerId,
@@ -46,11 +47,6 @@ export class RoomsService {
       hands: {},
       table: {},
       hasLaidDown: {},
-
-      scores: { [playerId]: 0 },
-      roundWinnerId: null,
-      turnCounter: 0,
-      laidDownTurn: {},
     };
 
     this.rooms.set(roomCode, room);
@@ -73,11 +69,6 @@ export class RoomsService {
       socketId,
       connected: true,
     });
-
-    // Initialize score for new player (in case of late join while in lobby)
-    room.scores[playerId] = 0;
-    room.hasLaidDown[playerId] = false;
-    room.laidDownTurn[playerId] = null;
 
     return { roomCode, playerId, room };
   }
@@ -118,7 +109,12 @@ export class RoomsService {
     room.status = 'PLAYING';
     room.contractIndex = 0;
 
-    room.deck = createDeck({ decks: 2, jokersPerDeck: 2 });
+
+    // Deck sizing rule:
+    // - 2 players => 1 deck (52 + 2 jokers)
+    // - 3+ players => 2 decks
+    room.numDecks = room.players.length === 2 ? 1 : 2;
+    room.deck = createDeck({ decks: room.numDecks ?? 2, jokersPerDeck: 2 });
     room.discard = [];
     room.table = {};
     room.hands = {};
@@ -127,31 +123,13 @@ export class RoomsService {
       room.table[p.id] = [];
       room.hands[p.id] = [];
       room.hasLaidDown[p.id] = false;
-      room.laidDownTurn[p.id] = null;
-      if (room.scores[p.id] == null) room.scores[p.id] = 0;
     }
 
-    room.roundWinnerId = null;
-    room.turnCounter = 0;
-
-    // Según reglas clásicas: 12 cartas por jugador.
-    dealHands(room, 12);
+    // Deal 11 cards each (configurable).
+    dealHands(room, 11);
 
     // Start discard pile with 1 card (must not be joker ideally; we accept it for simplicity)
-    // Start discard pile with 1 card (avoid joker as first discard when possible)
-    let firstDiscard = room.deck.pop();
-    if (firstDiscard?.isJoker) {
-      // Put it back and try a few times
-      room.deck.unshift(firstDiscard);
-      for (let i = 0; i < 10; i++) {
-        const c = room.deck.pop();
-        if (!c) break;
-        if (!c.isJoker) { firstDiscard = c; break; }
-        room.deck.unshift(c);
-      }
-      // If still joker, just take top
-      if (firstDiscard?.isJoker) firstDiscard = room.deck.pop();
-    }
+    const firstDiscard = room.deck.pop();
     if (firstDiscard) room.discard.push(firstDiscard);
 
     // First player starts
