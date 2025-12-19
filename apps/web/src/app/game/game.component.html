@@ -1,0 +1,246 @@
+<ng-container *ngIf="(state$|async) as state; else loading">
+  <ng-container *ngIf="(playerId$|async) as pid">
+
+    <div class="page">
+
+      <!-- Top: room + players -->
+      <div class="gameTop">
+        <div class="roomBlock">
+          <div class="label">Sala</div>
+          <div class="roomCode">{{ state.roomCode }}</div>
+          <div class="hint">
+            Tú: <b>{{ playerName(state, pid) }}</b>
+            <span class="badge" style="margin-left:8px" [class.good]="state.turnPlayerId===pid" [class.bad]="state.turnPlayerId!==pid">
+              {{ state.status === 'PLAYING' ? (state.turnPlayerId===pid ? 'tu turno' : 'esperando') : state.status }}
+            </span>
+          </div>
+        </div>
+
+        <div class="playersBlock">
+          <div class="label">Jugadores</div>
+          <div class="playersRow">
+            <div class="playerPill" *ngFor="let p of state.players" [class.me]="p.id===pid" [class.turn]="p.id===state.turnPlayerId">
+              <span class="dot" [class.on]="p.connected"></span>
+              <span class="name">{{ p.name }}</span>
+              <span class="tag" *ngIf="p.id===state.hostPlayerId">host</span>
+              <span class="tag" *ngIf="p.id===state.turnPlayerId && state.status==='PLAYING'">turno</span>
+              <span class="count" title="Cartas en mano">{{ state.handsCount[p.id] ?? 0 }}</span>
+              <span class="count" title="Puntos acumulados">{{ state.scores[p.id] ?? 0 }}p</span>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px; justify-content:flex-end">
+            <button class="btn" (click)="backToLobby()">Salir</button>
+            <button class="btn primary" (click)="startGame()" [disabled]="!canStart(state, pid)">Iniciar (host)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Middle: table + hand (priority) -->
+      <div class="gameMid">
+        <div class="tableSide">
+          <div class="panel">
+            <div class="panelTitle">Mesa</div>
+            <div class="panelSubtitle">Melds bajados por jugador</div>
+
+            <div class="stack" style="gap:10px">
+              <div class="tablePlayer" *ngFor="let p of state.players">
+                <div class="row" style="justify-content:space-between">
+                  <div class="row" style="gap:8px">
+                    <span class="label" style="font-size:12px">{{ p.name }}</span>
+                    <span class="badge" [class.good]="state.hasLaidDown[p.id]" [class.bad]="!state.hasLaidDown[p.id]">
+                      {{ state.hasLaidDown[p.id] ? 'bajó' : 'no bajó' }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="hint" *ngIf="(state.table[p.id]?.length ?? 0)===0">Sin melds</div>
+                <div class="miniMeld"
+                     *ngFor="let mm of state.table[p.id]"
+                     [class.clickable]="canLayoff(state, pid) && state.hasLaidDown[p.id]"
+                     (click)="layoffTo(state, pid, p.id, mm.id)">
+                  <span class="badge">{{ mm.type === 'SET' ? 'TRÍO' : 'ESCALA' }}</span>
+                  <span class="hint" style="color:var(--text)">{{ meldText(mm.cards) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <details class="panel" style="margin-top:12px">
+            <summary class="panelTitle" style="cursor:pointer">Log</summary>
+            <div class="log" style="margin-top:10px">
+              <div *ngFor="let line of (log$|async)">{{ line }}</div>
+            </div>
+          </details>
+        </div>
+
+        <div class="handSide">
+          <div class="piles">
+            <div class="pile">
+              <div class="label">Mazo</div>
+              <div class="pileCard">🂠</div>
+              <div class="hint">{{ state.deckCount }} cartas</div>
+            </div>
+            <div class="pile">
+              <div class="label">Descarte</div>
+              <div class="pileCard">{{ state.topDiscard ? cardShort(state.topDiscard) : '—' }}</div>
+              <div class="hint">tope</div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:12px">
+            <div class="panelTitle">Tus cartas</div>
+            <div class="panelSubtitle">
+              <div class="hint" style="margin-top:6px">
+                Contrato: <b>#{{ state.contractIndex + 1 }}/{{ state.contractsTotal }}</b> • {{ contractText(state) }}
+              </div>
+              <div class="hint" style="margin-top:6px">{{ contractHint(state, pid) }}</div>
+            </div>
+
+            <div class="row" style="justify-content:space-between; margin-top:10px">
+              <div class="label">Orden</div>
+              <div class="row" style="gap:8px">
+                <button class="btn" (click)="setSort('RANK')" [class.primary]="sortMode==='RANK'">
+                  Valor (A alto)
+                </button>
+                <button class="btn" (click)="setSort('SUIT')" [class.primary]="sortMode==='SUIT'">
+                  Pinta
+                </button>
+              </div>
+            </div>
+
+            <div class="builder" *ngIf="state.status==='PLAYING'">
+              <div class="builderTop">
+                <div class="label">Melds pendientes para bajar</div>
+                <button class="btn" (click)="clearBuilder()" [disabled]="pendingMelds.length===0 && selected.size===0">Limpiar</button>
+              </div>
+
+              <div class="builderEmpty" *ngIf="pendingMelds.length===0">
+                <div class="hint">Aún no agregas juegos. Selecciona cartas y usa “Trío” o “Escala”.</div>
+              </div>
+
+              <div class="builderList" *ngIf="pendingMelds.length>0">
+                <div class="builderItem" *ngFor="let m of pendingMelds; let i = index">
+                  <div class="builderItemTop">
+                    <div class="row" style="gap:8px">
+                      <span class="badge">{{ m.type === 'SET' ? 'TRÍO' : 'ESCALA' }}</span>
+                      <span class="hint" style="color:var(--text)">{{ m.cardIds.length }} carta(s)</span>
+                    </div>
+                    <button class="btn" (click)="removePending(i)">Quitar</button>
+                  </div>
+
+                  <div class="meldCards">
+                    <span class="cardChip" *ngFor="let c of pendingCards(m)" [class.joker]="c.isJoker">
+                      <ng-container *ngIf="c.isJoker; else chipNormal">
+                        <span class="jokerIconSm">🃏</span>
+                      </ng-container>
+                      <ng-template #chipNormal>{{ cardShort(c) }}</ng-template>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="handBig" *ngIf="(hand$|async) as hand">
+              <button class="cardBig"
+                      *ngFor="let c of visibleHand(hand)"
+                      (click)="toggleSelect(state, pid, c)"
+                      [class.sel]="isSelected(c.id)"
+                      [class.joker]="c.isJoker"
+                      [class.newCard]="c.id===recentlyDrawnId">
+                <ng-container *ngIf="c.isJoker; else normalCard">
+                  <span class="jokerIcon">🃏</span>
+                </ng-container>
+                <ng-template #normalCard>{{ cardShort(c) }}</ng-template>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom: status + action bar -->
+      <div class="statusBar">
+        <div class="statusItem">
+          <div class="label">Contrato</div>
+          <div class="statusValue">#{{ state.contractIndex + 1 }}/{{ state.contractsTotal }} • {{ contractText(state) }}</div>
+        </div>
+        <div class="statusItem">
+          <div class="label">Fase</div>
+          <div class="statusValue">{{ phaseLabel(state.phase) }}</div>
+        </div>
+        <div class="statusItem">
+          <div class="label">Turno</div>
+          <div class="statusValue">{{ state.turnPlayerId===pid ? 'Tú' : playerName(state, state.turnPlayerId) }}</div>
+        </div>
+        <div class="statusItem" *ngIf="state.roundWinnerId">
+          <div class="label">Última ronda</div>
+          <div class="statusValue">Ganó {{ playerName(state, state.roundWinnerId) }}</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:10px" *ngIf="(rejected$|async) as rej">
+        <div class="panelTitle">Acción rechazada</div>
+        <div class="panelSubtitle">{{ rej.reason }}</div>
+      </div>
+
+      <div class="actionBar">
+        <!-- DRAW -->
+        <button class="btn primary"
+                (click)="drawDeck()"
+                [disabled]="!canDraw(state, pid)">
+          1) Robar mazo
+        </button>
+        <button class="btn"
+                (click)="drawDiscard()"
+                [disabled]="!canDrawDiscard(state, pid)">
+          1) Robar descarte
+        </button>
+
+        <!-- MELD -->
+        <button class="btn warn"
+                (click)="makeMeld('SET')"
+                [disabled]="!canBuildSet(state, pid)">
+          2) Trío
+        </button>
+        <button class="btn warn"
+                (click)="makeMeld('RUN')"
+                [disabled]="!canBuildRun(state, pid)">
+          2) Escala
+        </button>
+        <button class="btn primary"
+                (click)="laydown()"
+                [disabled]="!canLaydown(state, pid)">
+          2) Bajar contrato
+        </button>
+        <button class="btn primary"
+                (click)="extraMeld()"
+                [disabled]="!canExtraMeld(state, pid)">
+          2) Bajar juego
+        </button>
+        <button class="btn"
+                (click)="endMeld()"
+                [disabled]="!canEndMeld(state, pid)">
+          2) Terminar
+        </button>
+
+        <!-- DISCARD -->
+        <button class="btn danger"
+                (click)="discardSelected()"
+                [disabled]="!canDiscard(state, pid)">
+          3) Botar
+        </button>
+      </div>
+    </div>
+  </ng-container>
+</ng-container>
+
+<ng-template #loading>
+  <div class="page pageCenter">
+    <div class="panel">
+      <div class="panelTitle">Cargando…</div>
+      <div class="panelSubtitle">Si no estás en una sala, vuelve al lobby.</div>
+      <div class="hr"></div>
+      <button class="btn" (click)="backToLobby()">Ir al lobby</button>
+    </div>
+  </div>
+</ng-template>

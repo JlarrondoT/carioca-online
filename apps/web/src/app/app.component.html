@@ -1,0 +1,18 @@
+<div class="appShell">
+  <header class="topHeader">
+    <div class="brand">
+      <div class="title">Carioca Online</div>
+      <div class="subtitle">Angular + NestJS • Jokers comodín • As=1</div>
+    </div>
+
+    <div class="conn">
+      <span class="badge" [class.good]="(connected$|async)" [class.bad]="!(connected$|async)">
+        {{ (connected$|async) ? 'socket conectado' : 'socket desconectado' }}
+      </span>
+    </div>
+  </header>
+
+  <main class="appMain">
+    <router-outlet></router-outlet>
+  </main>
+</div>

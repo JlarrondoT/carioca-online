@@ -1,0 +1,20 @@
+{
+  "name": "carioca-online",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev -w @carioca/api\" \"npm run dev -w @carioca/web\"",
+    "dev:api": "npm run dev -w @carioca/api",
+    "dev:web": "npm run dev -w @carioca/web",
+    "build": "npm run build -w @carioca/api && npm run build -w @carioca/web",
+    "lint": "npm run lint -w @carioca/api && npm run lint -w @carioca/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

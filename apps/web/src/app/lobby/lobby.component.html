@@ -1,0 +1,45 @@
+<div class="page pageCenter">
+  <div class="panel" style="max-width:760px">
+    <div class="panelTitle">Lobby</div>
+    <div class="panelSubtitle">Crea una sala o únete con un código. Primero elige tu nombre.</div>
+
+    <div class="hr"></div>
+
+    <div class="twoCols">
+      <div class="stack">
+        <div class="label">Tu nombre</div>
+        <input class="input" [(ngModel)]="name" placeholder="Ej: Juan" />
+        <div class="hint">Se guarda en este navegador.</div>
+      </div>
+
+      <div class="stack">
+        <div class="label">Código de sala (para unirse)</div>
+        <input class="input" [(ngModel)]="roomCode" placeholder="Ej: A7K4Q" style="text-transform:uppercase" />
+        <div class="hint">Si vas a crear sala, este campo no es necesario.</div>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div class="row" style="justify-content:space-between">
+      <div class="stack" style="gap:6px">
+        <div class="label">Acciones</div>
+        <div class="row">
+          <button class="btn primary" (click)="createRoom()" [disabled]="!canCreate()">
+            Crear sala
+          </button>
+          <button class="btn" (click)="joinRoom()" [disabled]="!canJoin()">
+            Unirse a sala
+          </button>
+        </div>
+        <div class="hint" *ngIf="busy">Conectando… (si no avanza, revisa que el API esté corriendo en localhost:3000)</div>
+      </div>
+
+      <div class="miniCard">
+        <div class="label">Prueba rápida (2 jugadores)</div>
+        <div class="hint">Abre dos pestañas. En una creas sala y copias el código. En la otra te unes.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
