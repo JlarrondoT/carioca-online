@@ -14,7 +14,7 @@ Este README describe la arquitectura, cómo poner el proyecto en marcha en desar
 ```mermaid
 flowchart LR
 	subgraph Monorepo
-		A[apps/api NestJ)] --- B[apps/web Angular]
+		A[apps/api NestJs] --- B[apps/web Angular]
 	end
 
 	B -->|WebSocket / HTTP| A
