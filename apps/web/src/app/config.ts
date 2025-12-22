@@ -1,3 +1,4 @@
 export const config = {
-  apiUrl: 'http://localhost:3000',
+  // Backend (Render)
+  apiUrl: 'https://carioca-online.onrender.com',
 };

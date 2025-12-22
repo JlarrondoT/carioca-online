@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node dist/main.js",
-    "build": "npx nest build",
+    "build": "tsc -p tsconfig.build.json",
     "start:prod": "node dist/main.js",
     "dev": "nest start --watch",
     "lint": "echo \"(lint placeholder)\""
