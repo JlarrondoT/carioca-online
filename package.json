@@ -12,6 +12,7 @@
     "lint": "npm run lint -w @carioca/api && npm run lint -w @carioca/web"
   },
   "devDependencies": {
+    "@nestjs/cli": "^11.0.14",
     "concurrently": "^9.0.0"
   },
   "engines": {
