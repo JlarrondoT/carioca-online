@@ -63,7 +63,47 @@ export class GameGateway {
     }
   }
 
-  @SubscribeMessage('game:action')
+  
+
+
+  @SubscribeMessage('chat:reaction')
+  async onReaction(@ConnectedSocket() client: Socket, @MessageBody() body: ReactionPayload) {
+    try {
+      const { roomCode, playerId, text } = body ?? ({} as any);
+      if (!roomCode || !playerId || !text) throw new Error('Invalid payload');
+
+      if (!REACTION_TEXTS.includes(text)) throw new Error('Invalid reaction');
+
+      const room = this.rooms.getRoom(roomCode);
+      if (!room) throw new Error('Room not found');
+
+      const player = room.players.find(p => p.id === playerId);
+      if (!player) throw new Error('Player not found');
+
+      if (player.socketId && player.socketId !== client.id) throw new Error('Invalid socket');
+
+      const msg: ReactionMessage = {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        playerId,
+        name: player.name,
+        text,
+        ts: Date.now(),
+      };
+
+      room.reactions = room.reactions ?? [];
+      room.reactions.push(msg);
+      if (room.reactions.length > 30) room.reactions.splice(0, room.reactions.length - 30);
+
+      this.server.to(roomCode).emit('chat:reaction', msg);
+      return { ok: true };
+    } catch (e: any) {
+      this.log(body?.roomCode ?? '-', 'reaction rejected', e?.message ?? e);
+      return { ok: false, message: e?.message ?? 'error' };
+    }
+  }
+
+
+@SubscribeMessage('game:action')
   onAction(@ConnectedSocket() client: Socket, @MessageBody() body: ActionPayload) {
     try {
       const room = this.rooms.applyAction(body.roomCode, body.playerId, body.action);

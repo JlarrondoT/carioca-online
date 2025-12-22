@@ -87,6 +87,9 @@ export type PublicState = {
   table: Record<string, Meld[]>;
   hasLaidDown: Record<string, boolean>;
   canLayoff: Record<string, boolean>;
+
+  // last reactions (for clients that join late)
+  reactions: ReactionMessage[];
 };
 
 export type ClientAction =
@@ -102,3 +105,25 @@ export type RoomCreatePayload = { name: string };
 export type RoomJoinPayload = { roomCode: string; name: string };
 export type GameStartPayload = { roomCode: string; playerId: string };
 export type ActionPayload = { roomCode: string; playerId: string; actionId: string; action: ClientAction };
+
+
+// --- Reactions chat (preset phrases) ---
+export const REACTION_TEXTS = [
+  'Excelente jugada!',
+  'Buen intento 😅',
+  '¡Noooo!',
+  'Te estás tardando en jugar ⏳',
+  'Dale, apúrate 🙏',
+  'GG',
+  'Jajaja 😂',
+  'Suerte 🍀',
+] as const;
+export type ReactionText = (typeof REACTION_TEXTS)[number];
+
+export type ReactionMessage = {
+  id: string;
+  playerId: string;
+  name: string;
+  text: ReactionText;
+  ts: number;
+};

@@ -45,3 +45,25 @@ export type ClientAction =
   | { type: 'LAYOFF'; targetPlayerId: string; meldId: string; cardIds: string[] }
   | { type: 'END_MELD' }
   | { type: 'DISCARD'; cardId: string };
+
+
+// --- Reactions chat (preset phrases) ---
+export const REACTION_TEXTS = [
+  'Excelente jugada!',
+  'Buen intento 😅',
+  '¡Noooo!',
+  'Te estás tardando en jugar ⏳',
+  'Dale, apúrate 🙏',
+  'GG',
+  'Jajaja 😂',
+  'Suerte 🍀',
+] as const;
+export type ReactionText = (typeof REACTION_TEXTS)[number];
+
+export type ReactionMessage = {
+  id: string;
+  playerId: string;
+  name: string;
+  text: ReactionText;
+  ts: number;
+};

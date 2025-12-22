@@ -68,6 +68,37 @@ export class GameService {
     });
   }
 
+
+private startKeepAlive() {
+  if (this.keepAliveTimer) return;
+
+  const ping = async () => {
+    try {
+      await fetch(`${config.apiUrl.replace(/\/$/, '')}/health`, { method: 'GET' });
+    } catch {
+      // ignore
+    }
+  };
+
+  // run once immediately, then every 10 minutes
+  ping();
+  this.keepAliveTimer = setInterval(ping, 10 * 60 * 1000);
+}
+
+private stopKeepAlive() {
+  if (this.keepAliveTimer) clearInterval(this.keepAliveTimer);
+  this.keepAliveTimer = null;
+}
+
+sendReaction(text: ReactionText) {
+  if (!this.socket) return;
+  const roomCode = this.roomCodeSubject.value;
+  const playerId = this.playerIdSubject.value;
+  if (!roomCode || !playerId) return;
+  this.socket.emit('chat:reaction', { roomCode, playerId, text });
+}
+
+
   createRoom(name: string) {
     this.ensureSocket();
     this.socket!.emit('room:create', { name });
