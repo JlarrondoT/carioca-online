@@ -29,19 +29,32 @@ jobs:
         run: npm ci
 
       - name: Build Angular (workspace)
-        run: npm run build -w @carioca/web -- --base-href /carioca-online/
+        run: npm run build -w @carioca/web -- --base-href /carioca-online/ --deploy-url /carioca-online/
+
+      - name: Resolve dist folder (where index.html is)
+        id: dist
+        shell: bash
+        run: |
+          INDEX="$(find apps/web/dist -type f -name index.html | head -n 1)"
+          if [ -z "$INDEX" ]; then
+            echo "ERROR: index.html not found under apps/web/dist"
+            find apps/web/dist -maxdepth 5 -type f | head -n 50
+            exit 1
+          fi
+          DIR="$(dirname "$INDEX")"
+          echo "index: $INDEX"
+          echo "dir: $DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 
       - name: SPA fallback (404.html)
+        shell: bash
         run: |
-          INDEX=$(find apps/web/dist -name index.html | head -n 1)
-          echo "index: $INDEX"
-          DIR=$(dirname "$INDEX")
-          cp "$INDEX" "$DIR/404.html"
+          cp "${{ steps.dist.outputs.dir }}/index.html" "${{ steps.dist.outputs.dir }}/404.html"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/web/dist
+          path: ${{ steps.dist.outputs.dir }}
 
   deploy:
     runs-on: ubuntu-latest
