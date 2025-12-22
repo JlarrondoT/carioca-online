@@ -9,11 +9,8 @@ type JoinedPayload = { roomCode: string; playerId: string; state: PublicState };
 @Injectable({ providedIn: 'root' })
 export class GameService {
   private socket: Socket | null = null;
+
   private keepAliveTimer: any | null = null;
-
-  private reactionsSubject = new BehaviorSubject<ReactionMessage[]>([]);
-  reactions$ = this.reactionsSubject.asObservable();
-
 
   readonly connected$ = new BehaviorSubject<boolean>(false);
   readonly state$ = new BehaviorSubject<PublicState | null>(null);
@@ -21,8 +18,12 @@ export class GameService {
   readonly playerId$ = new BehaviorSubject<string | null>(null);
   readonly roomCode$ = new BehaviorSubject<string | null>(null);
   readonly log$ = new BehaviorSubject<string[]>([]);
+
   readonly actionAccepted$ = new BehaviorSubject<{ actionId: string } | null>(null);
   readonly actionRejected$ = new BehaviorSubject<{ actionId: string; message: string } | null>(null);
+
+  private reactionsSubject = new BehaviorSubject<ReactionMessage[]>([]);
+  readonly reactions$ = this.reactionsSubject.asObservable();
 
   connect() {
     if (this.socket) return;
@@ -51,10 +52,8 @@ export class GameService {
       this.playerId$.next(payload.playerId);
       this.state$.next(payload.state);
       this.pushLog(`joined room ${payload.roomCode}`);
+      this.startKeepAlive();
     });
-
-    socket.on('room:error', (e: any) => this.pushLog(`room:error ${e?.message ?? e}`));
-    socket.on('game:error', (e: any) => this.pushLog(`game:error ${e?.message ?? e}`));
 
     socket.on('state:update', (state: PublicState) => {
       this.state$.next(state);
@@ -69,45 +68,43 @@ export class GameService {
       this.pushLog(`❌ action rejected (${p?.actionId ?? '-'}) — ${p?.message ?? 'invalid'}`);
     });
 
-    socket.on('chat:reaction', (msg: ReactionMessage) => {
-      const list = [...(this.reactionsSubject.value ?? []), msg];
-      this.reactionsSubject.next(list.slice(-30));
-    });
-
     socket.on('action:accepted', (p: any) => {
       this.actionAccepted$.next({ actionId: p?.actionId ?? '-' });
       this.pushLog(`✅ action accepted (${p?.actionId ?? '-'})`);
     });
+
+    // Reactions chat (preset phrases)
+    socket.on('chat:reaction', (msg: ReactionMessage) => {
+      const list = [...(this.reactionsSubject.value ?? []), msg];
+      this.reactionsSubject.next(list.slice(-30));
+    });
   }
 
-
-  private startKeepAlive() {
-  if (this.keepAliveTimer) return;
-
-  const ping = async () => {
-    try {
-      await fetch(`${config.apiUrl.replace(/\/$/, '')}/health`, { method: 'GET' });
-    } catch {
-      // ignore
+  disconnect() {
+    this.stopKeepAlive();
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
     }
-  };
+    this.connected$.next(false);
+    this.state$.next(null);
+    this.hand$.next([]);
+    this.playerId$.next(null);
+    this.roomCode$.next(null);
+  }
 
-  // run once immediately, then every 10 minutes
-  ping();
-  this.keepAliveTimer = setInterval(ping, 10 * 60 * 1000);
-}
-
-  private stopKeepAlive() {
-  if (this.keepAliveTimer) clearInterval(this.keepAliveTimer);
-  this.keepAliveTimer = null;
-}
-
-  sendReaction(text: ReactionText) {
-  if (!this.socket) return;
-  const roomCode = this.roomCode$.value;
-  const playerId = this.playerId$.value;
-  if (!roomCode || !playerId) return;
-  this.socket.emit('chat:reaction', { roomCode, playerId, text });
+/**
+ * Resets room-scoped local state (used when returning to lobby).
+ * Keeps the socket connection alive so the user can re-create/join quickly.
+ */
+resetLocal() {
+  this.state$.next(null);
+  this.hand$.next([]);
+  this.playerId$.next(null);
+  this.roomCode$.next(null);
+  this.actionAccepted$.next(null);
+  this.actionRejected$.next(null);
+  this.reactionsSubject.next([]);
 }
 
 
@@ -133,22 +130,44 @@ export class GameService {
     const roomCode = this.roomCode$.value;
     const playerId = this.playerId$.value;
     if (!roomCode || !playerId) return null;
-
     this.ensureSocket();
-    this.socket!.emit('game:action', { roomCode, playerId, actionId, action });
+    this.socket!.emit('game:action', { roomCode, playerId, action, actionId });
     return actionId;
   }
 
-  resetLocal() {
-    this.state$.next(null);
-    this.hand$.next([]);
-    this.playerId$.next(null);
-    this.roomCode$.next(null);
-    this.pushLog('local state reset (socket remains connected)');
+  sendReaction(text: ReactionText) {
+    const roomCode = this.roomCode$.value;
+    const playerId = this.playerId$.value;
+    if (!roomCode || !playerId) return;
+    this.ensureSocket();
+    this.socket!.emit('chat:reaction', { roomCode, playerId, text });
   }
 
   private ensureSocket() {
-    if (!this.socket) throw new Error('Socket not connected. Call connect() first.');
+    if (!this.socket) this.connect();
+  }
+
+  private startKeepAlive() {
+    if (this.keepAliveTimer) return;
+
+    const ping = async () => {
+      try {
+        const url = `${config.apiUrl.replace(/\/$/, '')}/health`;
+        // CORS-safe GET
+        await fetch(url, { method: 'GET', cache: 'no-store' });
+      } catch {
+        // ignore (Render sleeping / network hiccups)
+      }
+    };
+
+    // immediate ping + every 10 minutes
+    ping();
+    this.keepAliveTimer = setInterval(ping, 10 * 60 * 1000);
+  }
+
+  private stopKeepAlive() {
+    if (this.keepAliveTimer) clearInterval(this.keepAliveTimer);
+    this.keepAliveTimer = null;
   }
 
   private pushLog(msg: string) {
@@ -162,5 +181,5 @@ function cryptoRandomId() {
   // Browser-safe action id
   const arr = new Uint8Array(8);
   crypto.getRandomValues(arr);
-  return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('');
 }

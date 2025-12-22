@@ -1,69 +1,44 @@
 <ng-container *ngIf="(state$|async) as state; else loading">
   <ng-container *ngIf="(playerId$|async) as pid">
 
-    <div class="page">
+    <div class="gamePage">
+      <div class="gameBoard">
 
-      <!-- Top: room + players -->
-      <div class="gameTop">
-        <div class="roomBlock">
-          <div class="label">Sala</div>
-          <div class="roomCode">{{ state.roomCode }}</div>
-          <div class="hint">
-            Tú: <b>{{ playerName(state, pid) }}</b>
-            <span class="badge" style="margin-left:8px" [class.good]="state.turnPlayerId===pid" [class.bad]="state.turnPlayerId!==pid">
-              {{ state.status === 'PLAYING' ? (state.turnPlayerId===pid ? 'tu turno' : 'esperando') : state.status }}
-            </span>
-          </div>
-        </div>
-
-        <div class="playersBlock">
-          <div class="label">Jugadores</div>
-          <div class="playersRow">
-            <div class="playerPill" *ngFor="let p of state.players" [class.me]="p.id===pid" [class.turn]="p.id===state.turnPlayerId">
-              <span class="dot" [class.on]="p.connected"></span>
-              <span class="name">{{ p.name }}</span>
-              <span class="tag" *ngIf="p.id===state.hostPlayerId">host</span>
-              <span class="tag" *ngIf="p.id===state.turnPlayerId && state.status==='PLAYING'">turno</span>
-              <span class="count" title="Cartas en mano">{{ state.handsCount[p.id] ?? 0 }}</span>
-              <span class="count" title="Puntos acumulados">{{ state.scores[p.id] ?? 0 }}p</span>
-            </div>
-          </div>
-
-          <div class="row" style="margin-top:10px; justify-content:flex-end">
-            <button class="btn" (click)="backToLobby()">Salir</button>
-            <button class="btn primary" (click)="startGame()" [disabled]="!canStart(state, pid)">Iniciar (host)</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Middle: table + hand (priority) -->
-      <div class="gameMid">
-        <div class="tableSide">
+        <!-- Left column: room + status + log -->
+        <aside class="sideCol">
           <div class="panel">
-            <div class="panelTitle">Mesa</div>
-            <div class="panelSubtitle">Melds bajados por jugador</div>
-
-            <div class="stack" style="gap:10px">
-              <div class="tablePlayer" *ngFor="let p of state.players">
-                <div class="row" style="justify-content:space-between">
-                  <div class="row" style="gap:8px">
-                    <span class="label" style="font-size:12px">{{ p.name }}</span>
-                    <span class="badge" [class.good]="state.hasLaidDown[p.id]" [class.bad]="!state.hasLaidDown[p.id]">
-                      {{ state.hasLaidDown[p.id] ? 'bajó' : 'no bajó' }}
-                    </span>
-                  </div>
-                </div>
-
-                <div class="hint" *ngIf="(state.table[p.id]?.length ?? 0)===0">Sin melds</div>
-                <div class="miniMeld"
-                     *ngFor="let mm of state.table[p.id]"
-                     [class.clickable]="canLayoff(state, pid) && state.hasLaidDown[p.id]"
-                     (click)="layoffTo(state, pid, p.id, mm.id)">
-                  <span class="badge">{{ mm.type === 'SET' ? 'TRÍO' : 'ESCALA' }}</span>
-                  <span class="hint" style="color:var(--text)">{{ meldText(mm.cards) }}</span>
-                </div>
-              </div>
+            <div class="label">Sala</div>
+            <div class="roomCode" style="margin-top:6px">{{ state.roomCode }}</div>
+            <div class="hint" style="margin-top:8px">
+              Tú: <b>{{ playerName(state, pid) }}</b>
+              <span class="badge" style="margin-left:8px" [class.good]="state.turnPlayerId===pid" [class.bad]="state.turnPlayerId!==pid">
+                {{ state.status === 'PLAYING' ? (state.turnPlayerId===pid ? 'tu turno' : 'esperando') : state.status }}
+              </span>
             </div>
+
+            <div class="hr"></div>
+            <div class="row" style="justify-content:space-between">
+              <button class="btn" (click)="backToLobby()">Salir</button>
+              <button class="btn primary" (click)="startGame()" [disabled]="!canStart(state, pid)">Iniciar (host)</button>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:12px">
+            <div class="panelTitle">Estado</div>
+            <div class="kv" style="margin-top:10px">
+              <div class="k">Contrato</div>
+              <div class="v">#{{ state.contractIndex + 1 }}/{{ state.contractsTotal }} • {{ contractText(state) }}</div>
+
+              <div class="k">Fase</div>
+              <div class="v"><b>{{ phaseLabel(state.phase) }}</b></div>
+
+              <div class="k">Turno</div>
+              <div class="v">{{ state.turnPlayerId===pid ? 'Tú' : playerName(state, state.turnPlayerId) }}</div>
+            </div>
+            <div class="hint" style="margin-top:10px">{{ contractHint(state, pid) }}</div>
+
+            <div class="hr" *ngIf="state.roundWinnerId"></div>
+            <div class="hint" *ngIf="state.roundWinnerId">Última ronda: ganó <b>{{ playerName(state, state.roundWinnerId) }}</b></div>
           </div>
 
           <details class="panel" style="margin-top:12px">
@@ -73,183 +48,248 @@
             </div>
           </details>
 
-<details class="panel" open>
-  <summary class="panelSummary">
-    <div class="panelTitle">Reacciones</div>
-    <div class="panelHint">frases rápidas</div>
-  </summary>
+<details class="panel" style="margin-top:12px">
+  <summary class="panelTitle" style="cursor:pointer">Reacciones</summary>
 
-  <div class="reactionGrid">
-    <button class="chipBtn" *ngFor="let r of reactionOptions" (click)="sendReaction(r)" [disabled]="!canSendReaction()">
-      {{ r }}
+  <div class="log" style="margin-top:10px; max-height:180px; overflow:auto">
+    <div *ngFor="let r of (reactions$|async)">
+      <span class="label">{{ r.name }}:</span> <b>{{ r.text }}</b>
+    </div>
+  </div>
+
+  <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px">
+    <button
+      class="btn"
+      style="padding:6px 10px; border-radius:10px; font-size:12px"
+      *ngFor="let t of reactionOptions"
+      [disabled]="!canSendReaction()"
+      (click)="sendReaction(t)">
+      {{ t }}
     </button>
   </div>
 
-  <div class="reactionFeed">
-    <div class="reactionMsg" *ngFor="let m of (reactions$ | async)">
-      <span class="muted">{{ m.name }}:</span> {{ m.text }}
-    </div>
-  </div>
+  <div class="hint" style="margin-top:8px">Anti-spam: 1.5s entre reacciones.</div>
 </details>
-        </div>
 
-        <div class="handSide">
-          <div class="piles">
-            <div class="pile">
-              <div class="label">Mazo</div>
-              <div class="pileCard">🂠</div>
-              <div class="hint">{{ state.deckCount }} cartas</div>
-            </div>
-            <div class="pile">
-              <div class="label">Descarte</div>
-              <div class="pileCard">{{ state.topDiscard ? cardShort(state.topDiscard) : '—' }}</div>
-              <div class="hint">tope</div>
-            </div>
-          </div>
+        </aside>
 
-          <div class="panel" style="margin-top:12px">
-            <div class="panelTitle">Tus cartas</div>
-            <div class="panelSubtitle">
-              <div class="hint" style="margin-top:6px">
-                Contrato: <b>#{{ state.contractIndex + 1 }}/{{ state.contractsTotal }}</b> • {{ contractText(state) }}
-              </div>
-              <div class="hint" style="margin-top:6px">{{ contractHint(state, pid) }}</div>
-            </div>
+        <!-- Main column: hud + table + your hand/builder -->
+        <section class="mainCol">
 
-            <div class="row" style="justify-content:space-between; margin-top:10px">
-              <div class="label">Orden</div>
-              <div class="row" style="gap:8px">
-                <button class="btn" (click)="setSort('RANK')" [class.primary]="sortMode==='RANK'">
-                  Valor (A alto)
-                </button>
-                <button class="btn" (click)="setSort('SUIT')" [class.primary]="sortMode==='SUIT'">
-                  Pinta
-                </button>
-              </div>
-            </div>
-
-            <div class="builder" *ngIf="state.status==='PLAYING'">
-              <div class="builderTop">
-                <div class="label">Melds pendientes para bajar</div>
-                <button class="btn" (click)="clearBuilder()" [disabled]="pendingMelds.length===0 && selected.size===0">Limpiar</button>
+          <div class="panel hudBar">
+            <div class="hudPiles">
+              <div class="hudPile">
+                <div class="label">Mazo</div>
+                <div class="pileCard clickable" [class.disabled]="!canDraw(state, pid)" (click)="drawDeck()">🂠</div>
+                <div class="hint">{{ state.deckCount }} cartas</div>
               </div>
 
-              <div class="builderEmpty" *ngIf="pendingMelds.length===0">
-                <div class="hint">Aún no agregas juegos. Selecciona cartas y usa “Trío” o “Escala”.</div>
-              </div>
-
-              <div class="builderList" *ngIf="pendingMelds.length>0">
-                <div class="builderItem" *ngFor="let m of pendingMelds; let i = index">
-                  <div class="builderItemTop">
-                    <div class="row" style="gap:8px">
-                      <span class="badge">{{ m.type === 'SET' ? 'TRÍO' : 'ESCALA' }}</span>
-                      <span class="hint" style="color:var(--text)">{{ m.cardIds.length }} carta(s)</span>
-                    </div>
-                    <button class="btn" (click)="removePending(i)">Quitar</button>
-                  </div>
-
-                  <div class="meldCards">
-                    <span class="cardChip" *ngFor="let c of pendingCards(m)" [class.joker]="c.isJoker">
-                      <ng-container *ngIf="c.isJoker; else chipNormal">
-                        <span class="jokerIconSm">🃏</span>
-                      </ng-container>
-                      <ng-template #chipNormal>{{ cardShort(c) }}</ng-template>
-                    </span>
-                  </div>
+              <div class="hudPile"
+                   cdkDropList
+                   id="{{discardDropId}}"
+                   [cdkDropListConnectedTo]="allDropIds()"
+                   [cdkDropListDisabled]="!canDropToDiscard(state, pid)"
+                   (cdkDropListDropped)="onDropToDiscard($event, state, pid)">
+                <div class="label">Descarte</div>
+                <div class="pileCard clickable"
+                     [class.disabled]="!canDrawDiscard(state, pid)"
+                     (click)="drawDiscard()">
+                  {{ state.topDiscard ? cardShort(state.topDiscard) : '—' }}
+                </div>
+                <div class="hint">
+                  <ng-container *ngIf="canDrawDiscard(state, pid)">click para robar</ng-container>
+                  <ng-container *ngIf="!canDrawDiscard(state, pid)">en Botar: arrastra aquí</ng-container>
                 </div>
               </div>
             </div>
 
-            <div class="handBig" *ngIf="(hand$|async) as hand">
-              <button class="cardBig"
-                      *ngFor="let c of visibleHand(hand)"
-                      (click)="toggleSelect(state, pid, c)"
-                      [class.sel]="isSelected(c.id)"
-                      [class.joker]="c.isJoker"
-                      [class.newCard]="c.id===recentlyDrawnId">
-                <ng-container *ngIf="c.isJoker; else normalCard">
-                  <span class="jokerIcon">🃏</span>
-                </ng-container>
-                <ng-template #normalCard>{{ cardShort(c) }}</ng-template>
-              </button>
+            <div class="hudCenter">
+              <div class="label">Contrato activo</div>
+              <div class="hudValue">#{{ state.contractIndex + 1 }}/{{ state.contractsTotal }} • {{ contractText(state) }}</div>
+              <div class="hint" style="margin-top:4px">Jugador activo: <b>{{ state.turnPlayerId===pid ? 'Tú' : playerName(state, state.turnPlayerId) }}</b></div>
+            </div>
+
+            <div class="hudRight">
+              <div class="label">Jugadores</div>
+              <div class="playersRow" style="margin-top:6px">
+                <div class="playerPill" *ngFor="let p of state.players" [class.me]="p.id===pid" [class.turn]="p.id===state.turnPlayerId">
+                  <span class="dot" [class.on]="p.connected"></span>
+                  <span class="name">{{ p.name }}</span>
+                  <span class="tag" *ngIf="p.id===state.hostPlayerId">host</span>
+                  <span class="tag" *ngIf="p.id===state.turnPlayerId && state.status==='PLAYING'">turno</span>
+                  <span class="count" title="Cartas en mano">{{ state.handsCount[p.id] ?? 0 }}</span>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- Bottom: status + action bar -->
-      <div class="statusBar">
-        <div class="statusItem">
-          <div class="label">Contrato</div>
-          <div class="statusValue">#{{ state.contractIndex + 1 }}/{{ state.contractsTotal }} • {{ contractText(state) }}</div>
-        </div>
-        <div class="statusItem">
-          <div class="label">Fase</div>
-          <div class="statusValue">{{ phaseLabel(state.phase) }}</div>
-        </div>
-        <div class="statusItem">
-          <div class="label">Turno</div>
-          <div class="statusValue">{{ state.turnPlayerId===pid ? 'Tú' : playerName(state, state.turnPlayerId) }}</div>
-        </div>
-        <div class="statusItem" *ngIf="state.roundWinnerId">
-          <div class="label">Última ronda</div>
-          <div class="statusValue">Ganó {{ playerName(state, state.roundWinnerId) }}</div>
-        </div>
-      </div>
+          <div class="panel tablePanel">
+            <div class="panelTitle">Mesa</div>
+            <div class="panelSubtitle">Los juegos bajados quedan aquí. Para botar cartas: arrastra una carta a un juego (solo cuando esté habilitado).</div>
 
-      <div class="panel" style="margin-top:10px" *ngIf="(rejected$|async) as rej">
-        <div class="panelTitle">Acción rechazada</div>
-        <div class="panelSubtitle">{{ rej.reason }}</div>
+            <div class="tablePlayers">
+              <div class="tableCol" *ngFor="let p of state.players" [class.turn]="p.id===state.turnPlayerId" [class.me]="p.id===pid">
+                <div class="tableColHead">
+                  <div class="row" style="justify-content:space-between; width:100%">
+                    <div class="row" style="gap:8px">
+                      <span class="name" style="font-weight:900">{{ p.name }}</span>
+                      <span class="badge" [class.good]="state.hasLaidDown[p.id]" [class.bad]="!state.hasLaidDown[p.id]">
+                        {{ state.hasLaidDown[p.id] ? 'bajó' : 'no bajó' }}
+                      </span>
+                    </div>
+                    <span class="count" title="Puntos">{{ state.scores[p.id] ?? 0 }}p</span>
+                  </div>
+                </div>
+
+                <ng-container *ngIf="(state.table[p.id]?.length ?? 0) > 0; else noMelds">
+                  <div class="tableMeld"
+                       *ngFor="let m of state.table[p.id]"
+                       cdkDropList
+                       id="{{tableDropId(p.id, m.id)}}"
+                       [cdkDropListConnectedTo]="allDropIds()"
+                       [cdkDropListDisabled]="!canDropToTableMeld(state, pid, p.id)"
+                       (cdkDropListDropped)="onDropToTableMeld($event, state, pid, p.id, m.id)"
+                       [class.dropEnabled]="canDropToTableMeld(state, pid, p.id)">
+                    <div class="tableMeldTop">
+                      <span class="badge">{{ m.type === 'SET' ? 'TRÍO' : 'ESCALA' }}</span>
+                      <span class="hint" style="color:var(--text)">{{ m.cards.length }} carta(s)</span>
+                    </div>
+                    <div class="meldCards">
+                      <span class="cardChip" *ngFor="let c of m.cards" [class.joker]="c.isJoker">
+                        <ng-container *ngIf="c.isJoker; else normalTc">
+                          <span class="jokerIconSm">🃏</span>
+                        </ng-container>
+                        <ng-template #normalTc>{{ cardShort(c) }}</ng-template>
+                      </span>
+                    </div>
+                  </div>
+                </ng-container>
+
+                <ng-template #noMelds>
+                  <div class="hint" style="margin-top:10px">Sin melds</div>
+                </ng-template>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel playerPanel">
+            <div class="playerPanelTop">
+              <div>
+                <div class="panelTitle">Tus cartas</div>
+                <div class="panelSubtitle">Armar: crea un juego y arrastra cartas. Botar: arrastra una carta al descarte o selecciónala y usa “Botar”.</div>
+              </div>
+
+              <div class="row" style="gap:8px; align-items:flex-end">
+                <div class="label" style="margin-right:6px">Orden</div>
+                <button class="btn" (click)="setSort('RANK')" [class.primary]="sortMode==='RANK'">Valor (A alto)</button>
+                <button class="btn" (click)="setSort('SUIT')" [class.primary]="sortMode==='SUIT'">Pinta</button>
+              </div>
+            </div>
+
+            <div class="playerGrid">
+              <div class="builderArea">
+                <div class="builderHead">
+                  <div class="label">Melds pendientes</div>
+                  <div class="row" style="gap:8px">
+                    <button class="btn warn" (click)="addPending('SET')" [disabled]="!canBuild(state, pid)">+ Trío</button>
+                    <button class="btn warn" (click)="addPending('RUN')" [disabled]="!canBuild(state, pid)">+ Escala</button>
+                    <button class="btn" (click)="clearBuilder()" [disabled]="pendingMelds.length===0">Limpiar</button>
+                  </div>
+                </div>
+
+                <div class="builderEmpty" *ngIf="pendingMelds.length===0">
+                  <div class="hint">Crea un Trío/Escala y arrastra cartas desde tu mano. (Las cartas puestas aquí se quitan de tu mano hasta que limpies o bajes).</div>
+                </div>
+
+                <div class="builderList" *ngIf="pendingMelds.length>0">
+                  <div class="builderItem" *ngFor="let m of pendingMelds; let i = index">
+                    <div class="builderItemTop">
+                      <div class="row" style="gap:8px">
+                        <span class="badge">{{ meldLabel(m) }}</span>
+                        <span class="hint" style="color:var(--text)">{{ m.cardIds.length }} carta(s)</span>
+                      </div>
+                      <button class="btn" (click)="removePending(i)">Quitar</button>
+                    </div>
+
+                    <div class="dropZone"
+                         cdkDropList
+                         id="{{pendingDropId(m)}}"
+                         [cdkDropListConnectedTo]="allDropIds()"
+                         [cdkDropListDisabled]="!canDropToPending(state, pid)"
+                         (cdkDropListDropped)="onDropToPending($event, state, pid, m)">
+                      <div class="hint" *ngIf="m.cardIds.length===0">Arrastra cartas aquí</div>
+                      <div class="meldCards" *ngIf="m.cardIds.length>0">
+                        <div class="cardChip draggableChip"
+                             *ngFor="let c of pendingCards(m)"
+                             cdkDrag
+                             [cdkDragData]="c"
+                             (cdkDragStarted)="dragStarted()"
+                             (cdkDragEnded)="dragEnded()"
+                             [class.joker]="c.isJoker">
+                          <ng-container *ngIf="c.isJoker; else normalPc">
+                            <span class="jokerIconSm">🃏</span>
+                          </ng-container>
+                          <ng-template #normalPc>{{ cardShort(c) }}</ng-template>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="handArea"
+                   cdkDropList
+                   id="{{handDropId}}"
+                   [cdkDropListConnectedTo]="allDropIds()"
+                   [cdkDropListDisabled]="!canDropToHand(state, pid)"
+                   (cdkDropListDropped)="onDropToHand($event, state, pid)">
+                <div class="handBig" *ngIf="(hand$|async) as hand">
+                  <div class="cardTile"
+                       *ngFor="let c of visibleHand(hand)"
+                       cdkDrag
+                       [cdkDragData]="c"
+                       (cdkDragStarted)="dragStarted()"
+                       (cdkDragEnded)="dragEnded()"
+                       (click)="onCardClick($event, state, pid, c)"
+                       [class.joker]="c.isJoker"
+                       [class.newCard]="c.id===recentlyDrawnId"
+                       [class.sel]="c.id===discardSelectedId">
+                    <ng-container *ngIf="c.isJoker; else normalHc">
+                      <span class="jokerIcon">🃏</span>
+                    </ng-container>
+                    <ng-template #normalHc>{{ cardShort(c) }}</ng-template>
+                  </div>
+                </div>
+                <div class="hint" style="margin-top:8px">Tip: arrastra una carta desde aquí a un juego en la mesa (cuando esté habilitado) o al descarte (en Botar).</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:12px" *ngIf="(rejected$|async) as rej">
+            <div class="panelTitle">Acción rechazada</div>
+            <div class="panelSubtitle">{{ rej.message ?? rej.reason }}</div>
+          </div>
+
+        </section>
       </div>
 
       <div class="actionBar">
         <!-- DRAW -->
-        <button class="btn primary"
-                (click)="drawDeck()"
-                [disabled]="!canDraw(state, pid)">
-          1) Robar mazo
-        </button>
-        <button class="btn"
-                (click)="drawDiscard()"
-                [disabled]="!canDrawDiscard(state, pid)">
-          1) Robar descarte
-        </button>
+        <button class="btn primary" (click)="drawDeck()" [disabled]="!canDraw(state, pid)">1) Robar mazo</button>
+        <button class="btn" (click)="drawDiscard()" [disabled]="!canDrawDiscard(state, pid)">1) Robar descarte</button>
 
         <!-- MELD -->
-        <button class="btn warn"
-                (click)="makeMeld('SET')"
-                [disabled]="!canBuildSet(state, pid)">
-          2) Trío
-        </button>
-        <button class="btn warn"
-                (click)="makeMeld('RUN')"
-                [disabled]="!canBuildRun(state, pid)">
-          2) Escala
-        </button>
-        <button class="btn primary"
-                (click)="laydown()"
-                [disabled]="!canLaydown(state, pid)">
-          2) Bajar contrato
-        </button>
-        <button class="btn primary"
-                (click)="extraMeld()"
-                [disabled]="!canExtraMeld(state, pid)">
-          2) Bajar juego
-        </button>
-        <button class="btn"
-                (click)="endMeld()"
-                [disabled]="!canEndMeld(state, pid)">
-          2) Terminar
-        </button>
+        <button class="btn warn" (click)="addPending('SET')" [disabled]="!canBuild(state, pid)">2) Nuevo trío</button>
+        <button class="btn warn" (click)="addPending('RUN')" [disabled]="!canBuild(state, pid)">2) Nueva escala</button>
+        <button class="btn primary" (click)="laydown()" [disabled]="!canLaydown(state, pid)">2) Bajar contrato</button>
+        <button class="btn primary" (click)="extraMeld()" [disabled]="!canExtraMeld(state, pid)">2) Bajar juego</button>
+        <button class="btn" (click)="endMeld()" [disabled]="!canEndMeld(state, pid)">2) Terminar</button>
 
         <!-- DISCARD -->
-        <button class="btn danger"
-                (click)="discardSelected()"
-                [disabled]="!canDiscard(state, pid)">
-          3) Botar
-        </button>
+        <button class="btn danger" (click)="discardSelected()" [disabled]="!canDiscardPhase(state, pid) || !discardSelectedId">3) Botar</button>
       </div>
     </div>
+
   </ng-container>
 </ng-container>
 
