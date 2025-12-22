@@ -54,7 +54,10 @@ export type RoomState = {
 
   hasLaidDown: Record<string, boolean>;
 
-  // Scoring / round flow
+    // Reactions chat (preset only)
+  reactions?: ReactionMessage[];
+
+// Scoring / round flow
   scores: Record<string, number>;
   roundWinnerId: string | null;
 
@@ -89,7 +92,7 @@ export type PublicState = {
   canLayoff: Record<string, boolean>;
 
   // last reactions (for clients that join late)
-  reactions: ReactionMessage[];
+  reactions?: ReactionMessage[];
 };
 
 export type ClientAction =
@@ -119,6 +122,13 @@ export const REACTION_TEXTS = [
   'Suerte 🍀',
 ] as const;
 export type ReactionText = (typeof REACTION_TEXTS)[number];
+
+export type ReactionPayload = {
+  roomCode: string;
+  playerId: string;
+  text: ReactionText;
+};
+
 
 export type ReactionMessage = {
   id: string;

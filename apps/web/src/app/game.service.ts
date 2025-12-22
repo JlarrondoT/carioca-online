@@ -2,13 +2,18 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
 import { config } from './config';
-import { Card, ClientAction, PublicState } from './types';
+import { Card, ClientAction, PublicState, ReactionMessage, ReactionText } from './types';
 
 type JoinedPayload = { roomCode: string; playerId: string; state: PublicState };
 
 @Injectable({ providedIn: 'root' })
 export class GameService {
   private socket: Socket | null = null;
+  private keepAliveTimer: any | null = null;
+
+  private reactionsSubject = new BehaviorSubject<ReactionMessage[]>([]);
+  reactions$ = this.reactionsSubject.asObservable();
+
 
   readonly connected$ = new BehaviorSubject<boolean>(false);
   readonly state$ = new BehaviorSubject<PublicState | null>(null);
@@ -32,11 +37,13 @@ export class GameService {
     socket.on('connect', () => {
       this.connected$.next(true);
       this.pushLog(`connected (${socket.id})`);
+      this.startKeepAlive();
     });
 
     socket.on('disconnect', () => {
       this.connected$.next(false);
       this.pushLog('disconnected');
+      this.stopKeepAlive();
     });
 
     socket.on('room:joined', (payload: JoinedPayload) => {
@@ -62,6 +69,11 @@ export class GameService {
       this.pushLog(`❌ action rejected (${p?.actionId ?? '-'}) — ${p?.message ?? 'invalid'}`);
     });
 
+    socket.on('chat:reaction', (msg: ReactionMessage) => {
+      const list = [...(this.reactionsSubject.value ?? []), msg];
+      this.reactionsSubject.next(list.slice(-30));
+    });
+
     socket.on('action:accepted', (p: any) => {
       this.actionAccepted$.next({ actionId: p?.actionId ?? '-' });
       this.pushLog(`✅ action accepted (${p?.actionId ?? '-'})`);
@@ -69,7 +81,7 @@ export class GameService {
   }
 
 
-private startKeepAlive() {
+  private startKeepAlive() {
   if (this.keepAliveTimer) return;
 
   const ping = async () => {
@@ -85,15 +97,15 @@ private startKeepAlive() {
   this.keepAliveTimer = setInterval(ping, 10 * 60 * 1000);
 }
 
-private stopKeepAlive() {
+  private stopKeepAlive() {
   if (this.keepAliveTimer) clearInterval(this.keepAliveTimer);
   this.keepAliveTimer = null;
 }
 
-sendReaction(text: ReactionText) {
+  sendReaction(text: ReactionText) {
   if (!this.socket) return;
-  const roomCode = this.roomCodeSubject.value;
-  const playerId = this.playerIdSubject.value;
+  const roomCode = this.roomCode$.value;
+  const playerId = this.playerId$.value;
   if (!roomCode || !playerId) return;
   this.socket.emit('chat:reaction', { roomCode, playerId, text });
 }

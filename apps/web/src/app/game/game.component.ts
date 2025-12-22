@@ -3,7 +3,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { GameService } from '../game.service';
-import { Card, MeldType, PublicState } from '../types';
+import { Card, MeldType, PublicState, ReactionText, REACTION_TEXTS } from '../types';
 
 type PendingMeld = { type: MeldType; cardIds: string[] };
 
@@ -34,6 +34,9 @@ export class GameComponent implements OnInit, OnDestroy {
 
   // Observables
   state$ = this.game.state$;
+  reactions$ = this.game.reactions$;
+  reactionOptions = REACTION_TEXTS;
+  lastReactionAt = 0;
   hand$ = this.game.hand$;
   playerId$ = this.game.playerId$;
   roomCode$ = this.game.roomCode$;
