@@ -1,16 +1,17 @@
-# Fix de build (Cloud Run): exports y tipos alineados con el código actual
+# Fix de compilación API (Nest) para deploy en Render
 
-Este zip contiene un reemplazo de:
-- `apps/api/src/types.ts`
+Copia estos archivos encima de tu repo (misma ruta):
+- apps/api/src/types.ts
+- apps/api/src/rooms.service.ts
 
-Corrige:
-- exports faltantes: `ActionPayload`, `RoomCreatePayload`, `RoomJoinPayload`, `GameStartPayload`, `ClientAction`
-- propiedades esperadas por el código: `hostPlayerId`, `discard`, `scores`, etc.
-- `Card` como unión discriminada (evita `never` en Extract<...> con isJoker)
+Esto corrige:
+- Payloads: GameStartPayload y ActionPayload incluyen playerId
+- ClientAction LAYDOWN/MELD_EXTRA usa melds como {type, cardIds[]} (como espera rules.ts)
+- PublicState incluye currentContract
+- RoomState requiere scores/turnCounter/laidDownTurn y createRoom los inicializa
+- startGame usa 1 mazo si hay 2 jugadores (52 + 2 jokers)
 
-## Aplicar
-1) Descomprime encima del repo (respeta rutas).
-2) Reintenta:
-```powershell
-gcloud builds submit --config cloudbuild.yaml .
+Luego verifica:
+```bash
+npm run build -w @carioca/api
 ```

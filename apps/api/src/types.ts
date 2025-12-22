@@ -1,10 +1,9 @@
 export type Suit = 'S' | 'H' | 'D' | 'C';
-export type Rank = 1|2|3|4|5|6|7|8|9|10|11|12|12|13; // 1 = As (NOTE: keep as numeric ranks)
+export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13; // 1 = As
 
-/** Discriminated union so TS can narrow on isJoker */
-export type JokerCard = { id: string; isJoker: true };
-export type NormalCard = { id: string; isJoker: false; suit: Suit; rank: Rank };
-export type Card = JokerCard | NormalCard;
+export type Card =
+  | { id: string; isJoker: true }
+  | { id: string; isJoker: false; suit: Suit; rank: Rank };
 
 export type MeldType = 'SET' | 'RUN';
 
@@ -15,32 +14,32 @@ export type Meld = {
 };
 
 export type Phase = 'DRAW' | 'MELD' | 'DISCARD';
-export type RoomStatus = 'LOBBY' | 'PLAYING' | 'FINISHED';
 
-export type Contract = {
-  sets: number;
-  runs: number;
-  runLength: number;
-};
+export type Contract = { sets: number; runs: number; runLength: number };
 
 export type Player = {
   id: string;
   name: string;
-  connected: boolean;
-  /** Socket.IO socket id for private messages (hand updates). */
   socketId: string;
+  connected: boolean;
 };
+
+export type PublicPlayer = {
+  id: string;
+  name: string;
+  connected: boolean;
+};
+
+export type RoomStatus = 'LOBBY' | 'PLAYING' | 'FINISHED';
 
 export type RoomState = {
   roomCode: string;
-  hostPlayerId: string;
   status: RoomStatus;
 
+  hostPlayerId: string;
   players: Player[];
 
-  // Deck sizing rule: 2 players => 1 deck; 3+ => 2 decks
-  numDecks?: 1 | 2;
-
+  // Game
   contracts: Contract[];
   contractIndex: number;
 
@@ -48,7 +47,6 @@ export type RoomState = {
   phase: Phase;
 
   deck: Card[];
-  /** Discard pile (pozo). Top is last element. */
   discard: Card[];
 
   hands: Record<string, Card[]>;
@@ -56,58 +54,51 @@ export type RoomState = {
 
   hasLaidDown: Record<string, boolean>;
 
-  // Round/score helpers used by rules.ts
+  // Scoring / round flow
   scores: Record<string, number>;
-  roundWinnerId?: string | null;
+  roundWinnerId: string | null;
 
-  // Turn bookkeeping (some rules use this)
-  turnCounter?: number;
-  laidDownTurn?: Record<string, number | null>;
-};
-
-export type PublicPlayer = {
-  id: string;
-  name: string;
-  connected: boolean;
-  /** Optional to keep compatibility if your rules.ts isn't populating it yet */
-  cardsCount?: number;
+  // Turn counter increments when a turn ends (after DISCARD)
+  turnCounter: number;
+  // The turnCounter value when the player laid down the contract in this round.
+  // Used to enforce "botar a juegos" only after completing a full round.
+  laidDownTurn: Record<string, number | null>;
 };
 
 export type PublicState = {
   roomCode: string;
-  hostPlayerId: string;
   status: RoomStatus;
-
+  hostPlayerId: string;
   players: PublicPlayer[];
 
   contractIndex: number;
-  contractsTotal?: number;
+  contractsTotal: number;
+  currentContract: Contract;
+  scores: Record<string, number>;
+  roundWinnerId: string | null;
 
   turnPlayerId: string | null;
   phase: Phase;
 
   deckCount: number;
-  topDiscard: Card | null;
+  topDiscard?: Card;
 
+  handsCount: Record<string, number>;
   table: Record<string, Meld[]>;
   hasLaidDown: Record<string, boolean>;
-
-  scores?: Record<string, number>;
-  roundWinnerId?: string | null;
+  canLayoff: Record<string, boolean>;
 };
 
-// WebSocket payloads (used by game.gateway.ts)
-export type RoomCreatePayload = { name: string };
-export type RoomJoinPayload = { roomCode: string; name: string };
-export type GameStartPayload = { roomCode: string };
-export type ActionPayload = { roomCode: string; action: ClientAction; actionId?: string };
-
-// Client actions (used by rules.ts)
 export type ClientAction =
   | { type: 'DRAW_DECK' }
   | { type: 'DRAW_DISCARD' }
-  | { type: 'DISCARD'; cardId: string }
-  | { type: 'LAYDOWN'; melds: Meld[] }
+  | { type: 'LAYDOWN'; melds: Array<{ type: MeldType; cardIds: string[] }> }
+  | { type: 'MELD_EXTRA'; melds: Array<{ type: MeldType; cardIds: string[] }> }
+  | { type: 'LAYOFF'; targetPlayerId: string; meldId: string; cardIds: string[] }
   | { type: 'END_MELD' }
-  | { type: 'MELD_EXTRA'; melds: Meld[] }
-  | { type: 'LAYOFF'; targetPlayerId: string; meldId: string; cardIds: string[] };
+  | { type: 'DISCARD'; cardId: string };
+
+export type RoomCreatePayload = { name: string };
+export type RoomJoinPayload = { roomCode: string; name: string };
+export type GameStartPayload = { roomCode: string; playerId: string };
+export type ActionPayload = { roomCode: string; playerId: string; actionId: string; action: ClientAction };
