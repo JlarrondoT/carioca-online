@@ -1,0 +1,13 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '-t',
+        'southamerica-west1-docker.pkg.dev/$PROJECT_ID/carioca/api:1.0.0',
+        '-f',
+        'apps/api/Dockerfile',
+        '.'
+      ]
+images:
+  - 'southamerica-west1-docker.pkg.dev/$PROJECT_ID/carioca/api:1.0.0'

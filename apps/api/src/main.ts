@@ -9,9 +9,10 @@ async function bootstrap() {
     credentials: true,
   });
 
-  await app.listen(3000);
+    const port = Number(process.env.PORT) || 3000;
+  await app.listen(port, '0.0.0.0');
   // eslint-disable-next-line no-console
-  console.log('API listening on http://localhost:3000');
+  console.log(`API listening on port ${port}`);
 }
 
 bootstrap();
